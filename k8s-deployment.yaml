@@ -1,0 +1,169 @@
+# ============================================
+# 1. PersistentVolumeClaim (logs persistentes)
+# ============================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: microdom-logs-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+
+---
+# ============================================
+# 3. Service (ClusterIP en puerto 8083)
+# ============================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: microdom-service-cloud
+  labels:
+    app: microdom-cloud-alexa
+spec:
+  type: NodePort
+  selector:
+    app: microdom-cloud-alexa
+  ports:
+    - name: http
+      nodePort: 30144
+      port: 8083
+      targetPort: 8083
+---
+# ============================================
+# 4. Ingress (host → puerto 8083)
+# ============================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: microdom-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: microdom.witchblade.com.ar
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: microdom-service-cloud
+                port:
+                  number: 8083
+---
+# ============================================
+# 5. Deployment (limpio, optimizado, sin subPaths)
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: microdom-cloud-alexa
+  labels:
+    app: microdom-cloud-alexa
+    tier: backend
+    version: "1.0"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: microdom-cloud-alexa
+  template:
+    metadata:
+      labels:
+        app: microdom-cloud-alexa
+        tier: backend
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 10
+
+      containers:
+        - name: microdom-cloud-alexa
+          image: ghcr.io/wpirri/microdom-cloud-alexa:latest
+          imagePullPolicy: Always
+
+          # 🔥 Variables de entorno desde el Secret
+          env:
+            - name: DBHOST
+              valueFrom:
+                secretKeyRef:
+                  name: microdom
+                  key: DBHOST
+
+            - name: DBNAME
+              valueFrom:
+                secretKeyRef:
+                  name: microdom
+                  key: DBNAME
+
+            - name: DBUSER
+              valueFrom:
+                secretKeyRef:
+                  name: microdom
+                  key: DBUSER
+
+            - name: DBPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: microdom
+                  key: DBPASSWORD
+          ports:
+            - containerPort: 8083
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          # 🔥 Solo logs y configMap, sin Secret mounts
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 3
+            periodSeconds: 5
+
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: microdom-logs-pvc
+
+      imagePullSecrets:
+        - name: ghcr
+---
+# ============================================
+# 6. Secret (credenciales)
+# ============================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: microdom
+type: Opaque
+stringData:
+  DBUSER: "dompi_cloud"
+  DBPASSWORD: "dompi_cloud"
+  DBHOST: "192.168.10.32"
+  DBNAME: "DB_DOMPICLOUD"
+  
