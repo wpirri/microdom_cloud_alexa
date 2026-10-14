@@ -52,7 +52,7 @@ POST={"data": {"directive": {"header": {"messageId": "8fda64e8-af18-4724-8318-02
 
 """
 
-@app.post("/alexa", response_class=HTMLResponse)
+@app.post("/alexa")
 async def alexa_post(request: Request):
     body = await request.json()
 
@@ -79,48 +79,48 @@ async def alexa_post(request: Request):
 
     if email is None or namespace is None or name is None:
         logger.info(f"[POST:dompi_cloud_amazon.cgi] Falta algun datos clave en el mensaje recibido: namespace={namespace}, name={name}, email={email}")
-        return "response: " + json.dumps({"error": 1, "message": "Faltan parámetros"})
+        return {"response": {"error": 1, "message": "Faltan parámetros"}}
 
     system = get_client_system_by_amazon_key(email)
     if system is None:
         logger.info(f"[POST:dompi_cloud_amazon.cgi] No se pudo obtener el sistema para el email={email}")
-        return "response: " + json.dumps({"error": 2, "message": "Usuario no registrado"})
+        return {"response": {"error": 2, "message": "Usuario no registrado"}}
 
     logger.info(f"[POST:dompi_cloud_amazon.cgi] namespace: {namespace} - name: {name} - email: {email} - system: {system}")
 
     if namespace == "Alexa.Discovery" and name == "Discover":
         # 
         response_data = alexa_discover(system)
-        return "response: " + json.dumps(response_data)
+        return {"response": response_data}
     elif namespace == "Alexa.PowerController" and name == "TurnOn":
         objeto = body['data']['directive']['endpoint']['endpointId']
         objeto_real = objeto.replace("-", " ")
         # { "response": {"resp_code": "0", "resp_msg": "Ok", "Objeto": "Luz Taller", "Estado": "1", "Ultimo_Update": "2026-08-07 18:13:37" } }
         response_data = alexa_turn_on(system, objeto_real)
-        return "response: " + json.dumps(response_data)
+        return {"response": response_data}
     elif namespace == "Alexa.PowerController" and name == "TurnOff":
         objeto = body['data']['directive']['endpoint']['endpointId']
         objeto_real = objeto.replace("-", " ")
         # { "response": {"resp_code": "0", "resp_msg": "Ok", "Objeto": "Luz Pasillo", "Estado": "0", "Ultimo_Update": "2026-08-09 03:21:27" } }
         response_data = alexa_turn_off(system, objeto_real)
-        return "response: " + json.dumps(response_data)
+        return {"response": response_data}
     elif namespace == "Alexa.SecurityPanelController" and name == "Lock":
         objeto = body['data']['directive']['endpoint']['endpointId']
         objeto_real = objeto.replace("-", " ")
         # 
         response_data = alexa_lock(system, objeto_real)
-        return "response: " + json.dumps(response_data)
+        return {"response": response_data}
     elif namespace == "Alexa.SecurityPanelController" and name == "Unlock":
         objeto = body['data']['directive']['endpoint']['endpointId']
         objeto_real = objeto.replace("-", " ")
         # 
         response_data = alexa_unlock(system, objeto_real)
-        return "response: " + json.dumps(response_data)
+        return {"response": response_data}
     elif namespace == "Alexa" and name == "ReportState":
         objeto = body['data']['directive']['endpoint']['endpointId']
         objeto_real = objeto.replace("-", " ")
         # 
         response_data = alexa_report_state(system, objeto_real)
-        return "response: " + json.dumps(response_data)
+        return {"response": response_data}
 
-    return "response: " + json.dumps({"error": 2, "message": "Funcion desconocida o no especificada"})
+    return {"response": {"error": 2, "message": "Funcion desconocida o no especificada"}}
